@@ -16,21 +16,42 @@ Based on [my guide](https://github.com/mineek/iostethereddowngrade)
 - It is a *tethered* downgrade meaning you will have to boot tethered every single time from your PC if your battery dies or if you reboot your phone.
 - On A10-A11 devices crucial functionality such as the Home Button, Audio, Microphone, Vibration does NOT work at the moment.
 - You should NOT be tether downgrading your main device it is only recommended to tether downgrade a second device.
-- See [iphonewiki](https://www.theiphonewiki.com/wiki/BORD) for boardconfigs and identifiers.
-- `linux-patches/` contain patches that allow you to compile everything for linux, install `hfsprogs` and reboot to mount hfsplus images! [AUR](https://aur.archlinux.org/packages/hfsprogs)
+- See [iphonewiki](https://www.theiphonewiki.com/wiki/BORD) for boardconfigs and identifiers..
+- `linux-patches/` contain patches that allow you to compile everything for linux, use `patch -p1 < $file` to apply them.
+- the `bin/` directory is added to `$PATH` on script startup, so you can copy programs there.
 
 ## Requirements:
+- Before installing to `${ROOT}`, `export ROOT=${PWD}` or `export ROOT=<root of project>`
 - [libirecovery](https://github.com/libimobiledevice/libirecovery)
 - [futurerestore (fork)](https://github.com/futurerestore/futurerestore)
-- futurerestore must be the nightly build. A compiled binary can be found [here](https://github.com/futurerestore/futurerestore/actions)
+  - futurerestore must be the nightly build. A compiled binary can be found [here](https://github.com/futurerestore/futurerestore/actions)
 - [iBoot64patcher (fork)](https://github.com/Cryptiiiic/iBoot64Patcher)
-- Precompiled binaries for iBoot64Patcher can be found [here](https://github.com/Cryptiiiic/iBoot64Patcher/actions)
+  - Precompiled binaries for iBoot64Patcher can be found [here](https://github.com/Cryptiiiic/iBoot64Patcher/actions)
 - [Kernel64patcher (fork)](https://github.com/iSuns9/Kernel64Patcher)
+  - `gcc Kernel64Patcher.c -o Kernel64Patcher`
+  - `gcc Kernel64Patcher.c -o Kernel64Patcher -Iinclude-linux/` after patching on **linux**
+  - `cp Kernel64Patcher ${ROOT:-/nonexist}/bin/`
 - [img4tool](https://github.com/tihmstar/img4tool)
+  - `./autogen.sh --prefix=$PWD/out --enable-static=yes --enable-shared=no`
+  - `make install`
+  - `cp out/bin/img4tool ${ROOT:-/nonexist}/bin/`
 - [img4](https://github.com/xerub/img4lib)
+  - `make`
+  - `cp img4 ${ROOT:-/nonexist}/bin/`
 - [ldid](https://github.com/ProcursusTeam/ldid)
+  - `make`
+  - `cp ldid ${ROOT:-/nonexist}/bin/`
 - [restored_external64_patcher](https://github.com/iSuns9/restored_external64patcher)
+  - `make`
+  - `cp restored_external64_patcher ${ROOT:-/nonexist}/bin/`
 - [asr64_patcher](https://github.com/exploit3dguy/asr64_patcher)
+  - `make`
+  - `cp asr64_patcher ${ROOT:-/nonexist}/bin/`
+- [libdmg-hfsplus](https://github.com/planetbeing/libdmg-hfsplus) **for linux only**
+  - `cmake .`
+  - `cd hfs`
+  - `make`
+  - `cp hfsplus ${ROOT:-/nonexist}/bin/`
 - [Python3](https://www.python.org/downloads)
    - Make sure you updated Python and are not using the bundled one in macOS
 - Python dependencies

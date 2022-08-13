@@ -12,7 +12,8 @@ import tempfile
 import glob
 
 # Global variables
-ROOT = os.path.dirname(__file__) 
+ROOT = os.path.dirname(__file__)
+DEBUG = 0
 LINUX = (sys.platform == 'linux')
 
 # Append PATH
@@ -45,12 +46,23 @@ def print_info(string):
 def cleanup(directory) -> None:
     """ Remove any temp-files created """
     try: 
-      if (0): # DEBUG: stop on-error removal
+      if (DEBUG): # DEBUG: stop on-error removal
         return
 
       shutil.rmtree(directory, ignore_errors=True)
     except:
       print_error(f'Failed to remove {directory} (this is a bug)')
+
+def cleanup_trim(work, suffix):
+    """ Using a glob, remove any files that don't match {suffix} """
+    file_list = [fn for fn in glob.glob(f'{work}/**/*', recursive=True) if not os.path.basename(fn).endswith(suffix)]
+
+    for fn in file_list:
+      if fn.startswith(work) and not (DEBUG): # DEBUG: -> Don't remove user files, verify
+        try:
+          os.remove(fn)
+        except:
+          pass
 
 def check_for_command(prog) -> bool:
     """ Use the `command` shell-builtin to test for program """
@@ -118,6 +130,9 @@ def prep_restore(ipsw, blob, boardconfig, kpp, legacy, skip_baseband):
       
       execute(['hfsplus', f'{work}/ramdisk.dmg', 'extract', '/usr/sbin/asr', f'{work}/ramdisk/usr/sbin/asr'])
       execute(['hfsplus', f'{work}/ramdisk.dmg', 'extract', '/usr/local/bin/restored_external', f'{work}/ramdisk/usr/local/bin/restored_external'])
+
+      execute(['hfsplus', f'{work}/ramdisk.dmg', 'rm', '/usr/sbin/asr'])
+      execute(['hfsplus', f'{work}/ramdisk.dmg', 'rm', '/usr/local/bin/restored_external'])
     else:
       # mount it using hdiutil
       print_info('Mounting RamDisk')
@@ -167,8 +182,13 @@ def prep_restore(ipsw, blob, boardconfig, kpp, legacy, skip_baseband):
     print_info('Detaching RamDisk')
     if LINUX:
       # sys.exit(1)
-      execute(['hfsplus', f'{work}/ramdisk.dmg', 'addall' f'{work}/ramdisk'])
-    else:
+      execute(['hfsplus', f'{work}/ramdisk.dmg', 'add', f'{work}/ramdisk/usr/sbin/asr', '/usr/sbin/asr'])
+      execute(['hfsplus', f'{work}/ramdisk.dmg', 'add', f'{work}/ramdisk/usr/local/bin/restored_external', '/usr/local/bin/restored_external'])
+
+      execute(['hfsplus', f'{work}/ramdisk.dmg', 'chmod', '100755', '/usr/sbin/asr'])
+      execute(['hfsplus', f'{work}/ramdisk.dmg', 'chmod', '100755', '/usr/local/bin/restored_external'])
+      # execute(['hfsplus', f'{work}/ramdisk.dmg', 'addall' f'{work}/ramdisk'])
+    else: 
       execute(['hdiutil', 'detach', f'{work}/ramdisk'])
 
     # create the ramdisk using pyimg4
@@ -198,14 +218,7 @@ def prep_restore(ipsw, blob, boardconfig, kpp, legacy, skip_baseband):
 
     execute(rebuild_kernel_args)
 
-    # Cleanup/trim files, hack-ish-ily:
-    file_list = [fn for fn in glob.glob(f'{work}/**/*', recursive=True) if not os.path.basename(fn).endswith('im4p')]
-    for fn in file_list:
-      if fn.startswith(work) and (1): # DEBUG: -> Don't remove user files, verify
-        try:
-          os.remove(fn)
-        except:
-          pass
+    cleanup_trim(work, 'im4p')
 
     print_info('Moving files')
     # Done, move files to root (dirname $0)
@@ -333,14 +346,7 @@ def prep_boot(ipsw, blob, boardconfig, kpp, identifier, legacy):
     print_info('Signing Kernel')
     execute([sys.executable, '-m', 'pyimg4', 'img4', 'create', '-p', f'{work}/krnlboot.im4p', '-o', f'{work}/krnlboot.img4', '-m', 'IM4M'])
 
-    # Cleanup/trim files, hack-ish-ily:
-    file_list = [fn for fn in glob.glob(f'{work}/**/*', recursive=True) if not os.path.basename(fn).endswith('im4p')]
-    for fn in file_list:
-      if fn.startswith(work) and (1): # DEBUG: -> Don't remove user files, verify
-        try:
-          os.remove(fn)
-        except:
-          pass
+    cleanup_trim(work, 'img4')
 
     print_info('Moving files')
     shutil.move(work, ROOT)
@@ -349,7 +355,8 @@ def prep_boot(ipsw, blob, boardconfig, kpp, identifier, legacy):
 
     # done
     print_info('You can boot the restored device anytime by running the following command with the device in a pwndfu state:')
-    print(f'{os.path.realpath(ROOT + "/scripts/")}' + ('boot.sh' if kpp else 'boot-A10plus.sh'))
+    print(f'{os.path.realpath(ROOT) + "/scripts/"}' + ('boot.sh' if kpp else 'boot-A10plus.sh'))
+    print_info(f'Make sure to `cd` into "{work}" before running!')
 
     # Remove the trap so it doesn't error out
     atexit.unregister(cleanup)

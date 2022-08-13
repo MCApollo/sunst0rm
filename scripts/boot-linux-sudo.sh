@@ -22,16 +22,16 @@ try () {
 set -v
 
 try gaster pwn
-try irecovery -f boot/ibss.img4
-try irecovery -f boot/ibss.img4
-try irecovery -f boot/ibec.img4
-try irecovery -f boot/bootlogo.img4
+try irecovery -f ./ibss.img4
+try irecovery -f ./ibss.img4
+try irecovery -f ./ibec.img4
+try irecovery -f ./bootlogo.img4
 try irecovery -c "setpicture 0"
 try irecovery -c "bgcolor 255 255 255"
-sleep 5
-try irecovery -f boot/devicetree.img4
+sleep 1
+try irecovery -f ./devicetree.img4
 try irecovery -c devicetree
-try irecovery -f boot/trustcache.img4
+try irecovery -f ./trustcache.img4
 try irecovery -c firmware
-try irecovery -f boot/krnlboot.img4
+try irecovery -f ./krnlboot.img4
 try irecovery -c bootx
