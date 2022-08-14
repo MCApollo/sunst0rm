@@ -42,29 +42,29 @@ program_list = [
   'hfsplus' if LINUX else 'hdiutil'
 ]
 
-def print_error(string):
+def print_error(string) -> None:
     # TODO: color support?
     print(f'[!] Error: {string}', file=sys.stderr)
 
-def print_info(string):
+def print_info(string) -> None:
     print(f'[*] Info: {string}')
 
 def cleanup(directory) -> None:
     """ Remove any temp-files created """
     try: 
-      if (DEBUG): # DEBUG: stop on-error removal
+      if DEBUG:
         return
 
       shutil.rmtree(directory, ignore_errors=True)
     except:
       print_error(f'Failed to remove {directory} (this is a bug)')
 
-def cleanup_trim(work, suffix):
+def cleanup_trim(work, suffix) -> None:
     """ Using a glob, remove any files that don't match {suffix} """
     file_list = [fn for fn in glob.glob(f'{work}/**/*', recursive=True) if not os.path.basename(fn).endswith(suffix)]
 
     for fn in file_list:
-      if fn.startswith(work) and not (DEBUG): # DEBUG: -> Don't remove user files, verify
+      if fn.startswith(work) and not DEBUG: # -> Don't remove user files, verify
         try:
           os.remove(fn)
         except:
@@ -94,7 +94,7 @@ def execute(arguments, ignore_errors = False) -> str:
   FIXME: There should be a better way to wrap & check status code on each command
   """
   if DEBUG:
-    print(arguments) # DEBUG:
+    print(arguments)
 
   result = subprocess.run(arguments, capture_output=True)
   if (result.returncode > 0):
@@ -103,6 +103,54 @@ def execute(arguments, ignore_errors = False) -> str:
       sys.exit(1)
 
   return result.stdout
+
+def linux_hfsplus_sync(work) -> None:
+    """
+      `rsync`-like function to add files to ramdisk
+
+      We don't have the ramdisk mounted so we have to manually make dirs,
+        symlinks, files, and then finally chmod to same/correct permissions
+    """
+
+    if not (os.path.exists(f'{work}/ramdisk') and os.path.exists(f'{work}/ramdisk.dmg')):
+      print_error(f'Missing {work}/ramdisk or {work}/ramdisk.dmg (this is a bug)')
+      sys.exit(1)
+
+    # make directories
+    for directory in glob.iglob(f'{work}/ramdisk/*/**/', recursive=True):
+      path = os.path.relpath(directory, f'{work}/ramdisk')
+
+      if not path.startswith('/'):
+        path = '/' + path
+
+      execute(['hfsplus', f'{work}/ramdisk.dmg', 'mkdir', path], ignore_errors=True)
+
+    # copy files
+    for file in glob.iglob(f'{work}/ramdisk/**', recursive=True):
+      stat = os.stat(file, follow_symlinks=False)
+      permission = oct(stat.st_mode)[-3:]
+      path = os.path.relpath(file, f'{work}/ramdisk')
+      dirname = os.path.dirname(path)
+
+      if not path.startswith('/'):
+        path = '/' + path
+
+      if (os.path.isdir(file)):
+        continue
+
+      # ensure correct permissions for binaries; `permissions less than` to ensure setuid binaries keep permissions
+      if (dirname.endswith(('bin', 'sbin', 'libexec')) and int(permission) < 755):
+        permission = "100755"
+
+      if (os.path.islink(file)):
+        symlink = os.readlink(file)
+
+        execute(['hfsplus', f'{work}/ramdisk.dmg', 'link', path, symlink], ignore_errors=True)
+      else:
+        # Assume regular file:
+        execute(['hfsplus', f'{work}/ramdisk.dmg', 'add', file, path], ignore_errors=True)
+        
+      execute(['hfsplus', f'{work}/ramdisk.dmg', 'chmod', permission, path], ignore_errors=True)
 
 def prep_restore(ipsw, blob, boardconfig, kpp, legacy, skip_baseband, extra_ramdisk):
     # tempdir
@@ -148,9 +196,12 @@ def prep_restore(ipsw, blob, boardconfig, kpp, legacy, skip_baseband, extra_ramd
 
     if extra_ramdisk:
       print_info('Extracting custom ramdisk tar-ball')
-      execute(['tar', '-C', f'{work}/ramdisk/', '-xf', f'{extra_ramdisk}'])
+      execute(['tar', '-C', f'{work}/ramdisk/', '-xf', f'{extra_ramdisk}']) # FIXME: Would this work on macos before growing?
       # grow the ramdisk to .5GB
-      execute(['hfsplus', f'{work}/ramdisk.dmg', 'grow', str(round(5e+8))])
+      if LINUX:
+        execute(['hfsplus', f'{work}/ramdisk.dmg', 'grow', str(round(5e+8))])
+      else:
+        execute(['hdiutil', 'resize', '-size', '5024MB', f'{work}/ramdisk.dmg'])
 
     # patch asr into the ramdisk
     print_info('Patching ASR in the RamDisk')
@@ -199,41 +250,7 @@ def prep_restore(ipsw, blob, boardconfig, kpp, legacy, skip_baseband, extra_ramd
       # hfsplus might error out with addall before it finishes
       # execute(['hfsplus', f'{work}/ramdisk.dmg', 'addall', f'{work}/ramdisk'], ignore_errors=True)
       if extra_ramdisk:
-        # make directories
-        for directory in glob.iglob(f'{work}/ramdisk/*/**/', recursive=True):
-          path = os.path.relpath(directory, f'{work}/ramdisk')
-
-          if not path.startswith('/'):
-            path = '/' + path
-
-          execute(['hfsplus', f'{work}/ramdisk.dmg', 'mkdir', path], ignore_errors=True)
-
-        # copy files
-        for file in glob.iglob(f'{work}/ramdisk/**', recursive=True):
-          stat = os.stat(file, follow_symlinks=False)
-          permission = oct(stat.st_mode)[-3:]
-          path = os.path.relpath(file, f'{work}/ramdisk')
-          dirname = os.path.dirname(path)
-
-          if not path.startswith('/'):
-            path = '/' + path
-
-          if (os.path.isdir(file)):
-            continue
-
-          # ensure correct permissions for binaries; `permissions less than` to ensure setuid binaries keep permissions
-          if (dirname.endswith(('bin', 'sbin', 'libexec')) and int(permission) < 755):
-            permission = "100755"
-
-          if (os.path.islink(file)):
-            symlink = os.readlink(file)
-
-            execute(['hfsplus', f'{work}/ramdisk.dmg', 'link', path, symlink], ignore_errors=True)
-          else:
-            # Assume regular file:
-            execute(['hfsplus', f'{work}/ramdisk.dmg', 'add', file, path], ignore_errors=True)
-            
-          execute(['hfsplus', f'{work}/ramdisk.dmg', 'chmod', permission, path], ignore_errors=True)
+        linux_hfsplus_sync(work)
 
       # Ensure `asr` and `restored_external` make it with correct permissions
       execute(['hfsplus', f'{work}/ramdisk.dmg', 'add', f'{work}/ramdisk/usr/sbin/asr', '/usr/sbin/asr'])
@@ -299,9 +316,11 @@ def prep_restore(ipsw, blob, boardconfig, kpp, legacy, skip_baseband, extra_ramd
 
     return
 
-def prep_boot(ipsw, blob, boardconfig, kpp, identifier, legacy):
+def prep_boot(ipsw, blob, boardconfig, kpp, identifier, legacy, extra_ramdisk, boot_arguments):
     # tempdir
     work = tempfile.mkdtemp(prefix='boot-')
+    # make a directory in the work directory called ramdisk
+    os.mkdir(f'{work}/ramdisk')
     # register cleanup trap
     atexit.register(cleanup, work)
 
@@ -340,7 +359,7 @@ def prep_boot(ipsw, blob, boardconfig, kpp, identifier, legacy):
 
     # patch ibec like this:  iBoot64Patcher ibec.dmg ibec.patched -b "-v"
     print_info('Patching IBEC')
-    execute(['iBoot64Patcher', f'{work}/ibec.dmg', f'{work}/ibec.patched', '-b', '-v'])
+    execute(['iBoot64Patcher', f'{work}/ibec.dmg', f'{work}/ibec.patched', '-n', '-b', f'-v {boot_arguments}'])
 
     # convert blob into im4m like this: img4tool -e -s blob -m IM4M
     print_info('Converting BLOB to IM4M')
@@ -384,7 +403,7 @@ def prep_boot(ipsw, blob, boardconfig, kpp, identifier, legacy):
 
     # patch it like this:   Kernel64Patcher kcache.raw krnlboot.patched -f
     print_info('Patching Kernel')
-    execute(['Kernel64Patcher', f'{work}/kcache.raw', f'{work}/krnlboot.patched', '-f'])
+    execute(['Kernel64Patcher', f'{work}/kcache.raw', f'{work}/krnlboot.patched', '-f', '-a'])
 
     # convert it like this:   pyimg4 im4p create -i krnlboot.patched -o krnlboot.im4p --extra kpp.bin -f rkrn --lzss
     print_info('Converting Kernel')
@@ -398,6 +417,35 @@ def prep_boot(ipsw, blob, boardconfig, kpp, identifier, legacy):
     # sign it like this:  pyimg4 img4 create -p krnlboot.im4p -o krnlboot.img4 -m IM4M
     print_info('Signing Kernel')
     execute([sys.executable, '-m', 'pyimg4', 'img4', 'create', '-p', f'{work}/krnlboot.im4p', '-o', f'{work}/krnlboot.img4', '-m', 'IM4M'])
+
+    if extra_ramdisk:
+      # TODO: Inforce DRY here
+      # extract it using img4
+      ramdisk_path = manifest.get_comp(boardconfig, 'RestoreRamDisk')
+      if ramdisk_path == None:
+          print_error("Error: BoardConfig was not recognized")
+          sys.exit(1)
+
+      print_info('Extracting RamDisk')
+      execute(['img4', '-i', f'{work}/{ramdisk_path}', '-o', f'{work}/ramdisk.dmg'])
+
+      print_info('Extracting custom ramdisk tar-ball')
+      execute(['tar', '-C', f'{work}/ramdisk/', '-xf', f'{extra_ramdisk}'])
+      # grow the ramdisk to .5GB
+      if LINUX:
+        execute(['hfsplus', f'{work}/ramdisk.dmg', 'grow', str(round(5e+8))])
+      else:
+        execute(['hdiutil', 'resize', '-size', '5024MB', f'{work}/ramdisk.dmg'])
+
+      # detach the ramdisk
+      print_info('Detaching RamDisk')
+      if LINUX:
+        linux_hfsplus_sync(work)
+      else: 
+        execute(['hdiutil', 'detach', f'{work}/ramdisk'])
+
+      print_info('Creating RamDisk')
+      execute(['img4', '-i', f'{work}/ramdisk.dmg', '-o', f'{work}/ramdisk.img4', '-M', 'IM4M', '-A', '-T', 'rdsk'])
 
     cleanup_trim(work, 'img4')
 
@@ -434,6 +482,7 @@ def main():
     parser.add_argument('--legacy', help='Use Legacy Mode (iOS 11 or lower)', required=False, action='store_true')
     parser.add_argument('--skip-baseband', help='Skip Cellular Baseband', required=False, action='store_true')
     parser.add_argument('--extra-ramdisk', help='Add extra files to the ramdisk (must be $file.tar.gz that extracts without parent directory)', required=False)
+    parser.add_argument('--boot-arguments', help='Add extra boot arguments when creating boot files', required=False)
     # These options cannot be used together:
     conflict.add_argument('-b', '--boot', help='Create Boot files', action='store_true')
     conflict.add_argument('-r', '--restore', help='Create Restore files', action='store_true')
@@ -452,6 +501,7 @@ def main():
     legacy = bool(args.legacy)
     skip_baseband = bool(args.skip_baseband)
     extra_ramdisk = os.path.realpath(args.extra_ramdisk) if args.extra_ramdisk else None
+    boot_arguments = str(args.boot_arguments) if args.boot_arguments else ''
     identifier = args.identifier
 
     if not os.path.exists(ipsw):
@@ -466,14 +516,14 @@ def main():
       print_error('You need to specify an identifier (--identifier)')
       sys.exit(1)
 
-    if extra_ramdisk and not (extra_ramdisk.endswith('.tar.gz')):
+    if extra_ramdisk and (not os.path.exists(extra_ramdisk) or not (extra_ramdisk.endswith('.tar.gz'))):
       print_error('Extra ramdisk must be in the $file.tar.gz format')
       sys.exit(1)
 
     if restore:
       prep_restore(ipsw, blob, boardconfig, kpp, legacy, skip_baseband, extra_ramdisk)
     elif boot:
-      prep_boot(ipsw, blob, boardconfig, kpp, identifier, legacy)
+      prep_boot(ipsw, blob, boardconfig, kpp, identifier, legacy, extra_ramdisk, boot_arguments)
     else:
       print_error('No mode selected (this is a bug)')
       print(args)

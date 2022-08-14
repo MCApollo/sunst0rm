@@ -31,10 +31,12 @@ try gaster pwn
 try irecovery -f ./ibss.img4
 try irecovery -f ./ibss.img4
 try irecovery -f ./ibec.img4
-try irecovery -f ./bootlogo.img4
-try irecovery -c "setpicture 0"
 try irecovery -c "bgcolor 255 255 255"
 sleep 1
+if [[ -f "./ramdisk.img4" ]]; then
+  try irecovery -f ./ramdisk.img4
+  try irecovery -c ramdisk
+fi
 try irecovery -f ./devicetree.img4
 try irecovery -c devicetree
 try irecovery -f ./trustcache.img4

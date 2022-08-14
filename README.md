@@ -3,7 +3,7 @@
 # sunst0rm
 iOS Tether Downgrader for checkm8 devices
 
-Based on [my guide](https://github.com/mineek/iostethereddowngrade)
+Based on [this guide](https://github.com/mineek/iostethereddowngrade)
 
 ## please, please, please, DO NOT ask for help in any other discord. Developers not affiliated with sunst0rm are sick of getting issue after issue due to sunst0rm and I just don't want to irritate them, instead join the discord server linked below.
 ## Also: please DO NOT open issues at [futurerestore](https://github.com/futurerestore/futurerestore) when using sunst0rm, they're almost always NOT the fault of futurerestore.
@@ -60,27 +60,33 @@ Based on [my guide](https://github.com/mineek/iostethereddowngrade)
 
 **Make sure to use the forks listed above.**
 
-## How to use?
+## How to Use
 | Option (short)  | Option (long)               | Description                              |
 |-----------------|-----------------------------|------------------------------------------|
 | `-i IPSW`       | `--ipsw IPSW`               | Path to IPSW                             |
 | `-t SHSH2`      | `--blob SHSH2`              | Path to SHSH2                            |
-| `-r`       | `--restore`            | Restore mode                             |
-| `-b`       | `--boot`               | Boot mode                                |
+| `-r`            | `--restore`                 | Restore mode                             |
+| `-b`            | `--boot`                    | Boot mode                                |
 | `-d BOARDCONFIG`| `--boardconfig BOARDCONFIG` | BoardConfig to use  (E.g: `d221ap`)      |
-| `-kpp`     | `--kpp`                | Use KPP (A9 or lower)                    |
+| `-kpp`          | `--kpp`                     | Use KPP (A9 or lower)                    |
 | `-id IDENTIFIER`| `--identifier IDENTIFIER`   | Identifier to use  (E.g: `iPhone10,6`)   |
-|                 | `--legacy`             | Use Legacy Mode (iOS 11 or lower)        |
-|                 | `--skip-baseband`           | Skip Baseband sending, do NOT do this if your device does have baseband this argument is only ment to be passed when your device does *not* have baseband such as WiFi only iPads.                  |
+|                 | `--legacy`                  | Use Legacy Mode (iOS 11 or lower)        |
+|                 | `--skip-baseband`           | Skip Baseband sending, do NOT do this if your device does have baseband this argument is only ment to be passed when your device does *not* have baseband such as WiFi only iPads. |
+|                 | `--extra-ramdisk`           | Add files to the ramdisk from a `$file.tar.gz` file that extracts without a parent directory (`usr`, `var`, `Library` for example, must extract to `$PWD`). |
+|                 | `--boot-arguments`          | Create boot images with custom arguments, for example `rd=md0` boots from ramdisk. See the [iPhoneWiki](https://www.theiphonewiki.com/wiki/Boot-args_(iBoot_variable)). |
+
+#### Usage Notes:
+  - `--extra-ramdisk`: For a SSH ramdisk, compile [xerub/sshrd](https://github.com/xerub/sshrd/blob/master/restored_external.c), `mv compiled_restored_external usr/local/bin/restored_external`, there's a active fork at [nick-botticelli/sshrd](https://github.com/nick-botticelli/sshrd) with a binary in the github-actions to use.
+
 ### Restoring
 ```py
-python3 sunstorm.py -i 'IPSW' -t 'SHSH2' -r -d 'BOARDCONFIG'
+./sunstorm.py -i 'IPSW' -t 'SHSH2' -r -d 'BOARDCONFIG'
 ```
 - Use `--kpp` if you have KPP, otherwise don't add
 - A10+ Devices do NOT have KPP so do not add `--kpp` if you are attempting to tether downgrade an A10+ device, A7-A9X devices does have KPP so that means you will pass `--kpp` and to clear things up having KPP or not does not change the fact if you are able to tether downgrade your device.
 ### Booting
 ```py
-python3 sunstorm.py -i 'IPSW' -t 'SHSH2' -b -d 'BOARDCONFIG' -id 'IDENTIFIER'
+./sunstorm.py -i 'IPSW' -t 'SHSH2' -b -d 'BOARDCONFIG' -id 'IDENTIFIER'
 ```
 - Use `--kpp` if you have KPP, otherwise don't add
 ```
@@ -91,5 +97,7 @@ python3 sunstorm.py -i 'IPSW' -t 'SHSH2' -b -d 'BOARDCONFIG' -id 'IDENTIFIER'
 [M1n1Exploit](https://github.com/Mini-Exploit) - Some code from ra1nstorm
 
 [Arna13](https://github.com/Arna13) - Writing an easy to understand [guide](https://github.com/Arna13/sunst0rm-guide)
+
+[verygenericname](https://github.com/verygenericname) - [SSHRD_Script](https://github.com/verygenericname/SSHRD_Script) for showing how to get dropbear started via [xerub/sshrd](https://github.com/xerub/sshrd/blob/master/restored_external.c) because I'm dumb
 
 swayea#1655 - Logo's
