@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 
 export RETRY=3
+export SUDO=sudo
+
+# Check for futurerestore's linux_fix.sh - removes the need for sudo
+if [[ -f "/usr/lib/udev/rules.d/39-libirecovery.rules" ]]; then
+  export SUDO=""
+fi
 
 read -t 5 -p "Enter DFU to pwn & boot: (enter to continue)";
 
@@ -9,7 +15,7 @@ try () {
 
     echo "Trying '${@}'";
 
-    while ! sudo ${@}; do
+    while ! ${SUDO} ${@}; do
         if [[ ${i} > ${RETRY} ]]; then
             echo "Failed to run '${@}'";
             exit 1

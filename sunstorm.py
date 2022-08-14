@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 # Sunstorm.py
 
+"""
+TOOD:
+  - `from pyimg4 import IM4P`, use pyimg4 lib instead of calling the bin version
+  - Use RemoteZip to speed up having to download the full IPSW
+"""
+
 import sys
 import os
 import argparse
@@ -79,7 +85,7 @@ def check_for_dependencies() -> None:
         print_error(f'"{prog}" not found, please install it.')
         sys.exit(1)
 
-def execute(arguments) -> str:
+def execute(arguments, ignore_errors = False) -> str:
   """
   Wrapper for `subprocess.run`,
     - Stops process on error.
@@ -87,16 +93,18 @@ def execute(arguments) -> str:
 
   FIXME: There should be a better way to wrap & check status code on each command
   """
-  # print(arguments) # DEBUG:
+  if DEBUG:
+    print(arguments) # DEBUG:
 
   result = subprocess.run(arguments, capture_output=True)
-  if result.returncode > 0:
+  if (result.returncode > 0):
     print_error(f'Command "{arguments}" returned non-zero')
-    sys.exit(1)
+    if not ignore_errors:
+      sys.exit(1)
 
   return result.stdout
 
-def prep_restore(ipsw, blob, boardconfig, kpp, legacy, skip_baseband):
+def prep_restore(ipsw, blob, boardconfig, kpp, legacy, skip_baseband, extra_ramdisk):
     # tempdir
     work = tempfile.mkdtemp(prefix='restore-')
     # make a directory in the work directory called ramdisk
@@ -137,6 +145,12 @@ def prep_restore(ipsw, blob, boardconfig, kpp, legacy, skip_baseband):
       # mount it using hdiutil
       print_info('Mounting RamDisk')
       execute(['hdiutil', 'attach', f'{work}/ramdisk.dmg', '-mountpoint', f'{work}/ramdisk'])
+
+    if extra_ramdisk:
+      print_info('Extracting custom ramdisk tar-ball')
+      execute(['tar', '-C', f'{work}/ramdisk/', '-xf', f'{extra_ramdisk}'])
+      # grow the ramdisk to .5GB
+      execute(['hfsplus', f'{work}/ramdisk.dmg', 'grow', str(round(5e+8))])
 
     # patch asr into the ramdisk
     print_info('Patching ASR in the RamDisk')
@@ -181,13 +195,52 @@ def prep_restore(ipsw, blob, boardconfig, kpp, legacy, skip_baseband):
     # detach the ramdisk
     print_info('Detaching RamDisk')
     if LINUX:
-      # sys.exit(1)
+      # XXX: There is a `hfsplus addall` command, but we want to ensure correct permissions and symlinks:
+      # hfsplus might error out with addall before it finishes
+      # execute(['hfsplus', f'{work}/ramdisk.dmg', 'addall', f'{work}/ramdisk'], ignore_errors=True)
+      if extra_ramdisk:
+        # make directories
+        for directory in glob.iglob(f'{work}/ramdisk/*/**/', recursive=True):
+          path = os.path.relpath(directory, f'{work}/ramdisk')
+
+          if not path.startswith('/'):
+            path = '/' + path
+
+          execute(['hfsplus', f'{work}/ramdisk.dmg', 'mkdir', path], ignore_errors=True)
+
+        # copy files
+        for file in glob.iglob(f'{work}/ramdisk/**', recursive=True):
+          stat = os.stat(file, follow_symlinks=False)
+          permission = oct(stat.st_mode)[-3:]
+          path = os.path.relpath(file, f'{work}/ramdisk')
+          dirname = os.path.dirname(path)
+
+          if not path.startswith('/'):
+            path = '/' + path
+
+          if (os.path.isdir(file)):
+            continue
+
+          # ensure correct permissions for binaries; `permissions less than` to ensure setuid binaries keep permissions
+          if (dirname.endswith(('bin', 'sbin', 'libexec')) and int(permission) < 755):
+            permission = "100755"
+
+          if (os.path.islink(file)):
+            symlink = os.readlink(file)
+
+            execute(['hfsplus', f'{work}/ramdisk.dmg', 'link', path, symlink], ignore_errors=True)
+          else:
+            # Assume regular file:
+            execute(['hfsplus', f'{work}/ramdisk.dmg', 'add', file, path], ignore_errors=True)
+            
+          execute(['hfsplus', f'{work}/ramdisk.dmg', 'chmod', permission, path], ignore_errors=True)
+
+      # Ensure `asr` and `restored_external` make it with correct permissions
       execute(['hfsplus', f'{work}/ramdisk.dmg', 'add', f'{work}/ramdisk/usr/sbin/asr', '/usr/sbin/asr'])
       execute(['hfsplus', f'{work}/ramdisk.dmg', 'add', f'{work}/ramdisk/usr/local/bin/restored_external', '/usr/local/bin/restored_external'])
 
       execute(['hfsplus', f'{work}/ramdisk.dmg', 'chmod', '100755', '/usr/sbin/asr'])
       execute(['hfsplus', f'{work}/ramdisk.dmg', 'chmod', '100755', '/usr/local/bin/restored_external'])
-      # execute(['hfsplus', f'{work}/ramdisk.dmg', 'addall' f'{work}/ramdisk'])
     else: 
       execute(['hdiutil', 'detach', f'{work}/ramdisk'])
 
@@ -380,6 +433,7 @@ def main():
     parser.add_argument('-id', '--identifier', help='Identifier to use (ex. iPhoneX,X)', required=False)
     parser.add_argument('--legacy', help='Use Legacy Mode (iOS 11 or lower)', required=False, action='store_true')
     parser.add_argument('--skip-baseband', help='Skip Cellular Baseband', required=False, action='store_true')
+    parser.add_argument('--extra-ramdisk', help='Add extra files to the ramdisk (must be $file.tar.gz that extracts without parent directory)', required=False)
     # These options cannot be used together:
     conflict.add_argument('-b', '--boot', help='Create Boot files', action='store_true')
     conflict.add_argument('-r', '--restore', help='Create Restore files', action='store_true')
@@ -397,6 +451,7 @@ def main():
     kpp = bool(args.kpp)
     legacy = bool(args.legacy)
     skip_baseband = bool(args.skip_baseband)
+    extra_ramdisk = os.path.realpath(args.extra_ramdisk) if args.extra_ramdisk else None
     identifier = args.identifier
 
     if not os.path.exists(ipsw):
@@ -411,8 +466,12 @@ def main():
       print_error('You need to specify an identifier (--identifier)')
       sys.exit(1)
 
+    if extra_ramdisk and not (extra_ramdisk.endswith('.tar.gz')):
+      print_error('Extra ramdisk must be in the $file.tar.gz format')
+      sys.exit(1)
+
     if restore:
-      prep_restore(ipsw, blob, boardconfig, kpp, legacy, skip_baseband)
+      prep_restore(ipsw, blob, boardconfig, kpp, legacy, skip_baseband, extra_ramdisk)
     elif boot:
       prep_boot(ipsw, blob, boardconfig, kpp, identifier, legacy)
     else:
