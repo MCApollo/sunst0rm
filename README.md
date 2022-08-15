@@ -17,7 +17,7 @@ Based on [this guide](https://github.com/mineek/iostethereddowngrade)
 - On A10-A11 devices crucial functionality such as the Home Button, Audio, Microphone, Vibration does NOT work at the moment.
 - You should NOT be tether downgrading your main device it is only recommended to tether downgrade a second device.
 - See [iphonewiki](https://www.theiphonewiki.com/wiki/BORD) for boardconfigs and identifiers..
-- `linux-patches/` contain patches that allow you to compile everything for linux, use `patch -p1 < $file` to apply them.
+- `linux-patches/` contain patches that allow you to compile everything for linux, use `cd ${dir}`; `patch -p1 < $file` to apply them.
 - the `bin/` directory is added to `$PATH` on script startup, so you can copy programs there.
 
 ## Requirements:
@@ -29,7 +29,7 @@ Based on [this guide](https://github.com/mineek/iostethereddowngrade)
   - Precompiled binaries for iBoot64Patcher can be found [here](https://github.com/Cryptiiiic/iBoot64Patcher/actions)
 - [Kernel64patcher (fork)](https://github.com/iSuns9/Kernel64Patcher)
   - `gcc Kernel64Patcher.c -o Kernel64Patcher`
-  - `gcc Kernel64Patcher.c -o Kernel64Patcher -Iinclude-linux/` after patching on **linux**
+    - **linux**: `gcc Kernel64Patcher.c -o Kernel64Patcher -Iinclude-linux/` after patching.
   - `cp Kernel64Patcher ${ROOT:-/nonexist}/bin/`
 - [img4tool](https://github.com/tihmstar/img4tool)
   - `./autogen.sh --prefix=$PWD/out --enable-static=yes --enable-shared=no`
@@ -76,7 +76,12 @@ Based on [this guide](https://github.com/mineek/iostethereddowngrade)
 |                 | `--boot-arguments`          | Create boot images with custom arguments, for example `rd=md0` boots from ramdisk. See the [iPhoneWiki](https://www.theiphonewiki.com/wiki/Boot-args_(iBoot_variable)). |
 
 #### Usage Notes:
-  - `--extra-ramdisk`: For a SSH ramdisk, compile [xerub/sshrd](https://github.com/xerub/sshrd/blob/master/restored_external.c), `mv compiled_restored_external usr/local/bin/restored_external`, there's a active fork at [nick-botticelli/sshrd](https://github.com/nick-botticelli/sshrd) with a binary in the github-actions to use.
+  - `--extra-ramdisk`: *For a SSH ramdisk*, compile [xerub/sshrd](https://github.com/xerub/sshrd/blob/master/restored_external.c), `mv compiled_restored_external ${RAMDISK_HERE}/usr/local/bin/restored_external`, there's a active fork at [nick-botticelli/sshrd](https://github.com/nick-botticelli/sshrd) with a binary in the github-actions to use.
+    - On restore, this script will override `asr` and `restored_external` when making the ramdisk.
+    - On boot, a ramdisk will only be created when `--extra-ramdisk` is given.
+    - **linux**: Try `sudo usbmuxd --foreground -p` if you can't connect to the device with usbmuxd (for example `iproxy 2222 22`).
+  - `--boot-arguments`: *For a SSH ramdisk*, set these to `rd=md0` after creating a boot image using `--extra-ramdisk ${ramdisk}.tar.gz` that spawns dropbear/openssh on whatever port.
+    - Connect to the device using `iproxy 2222 ${port}`; `ssh -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" root@localhost -p ${port}`
 
 ### Restoring
 ```py

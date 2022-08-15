@@ -11,6 +11,10 @@ irecovery -f ./bootlogo.img4
 irecovery -c "setpicture 0"
 irecovery -c "bgcolor 0 0 0"
 sleep 3
+if [[ -f "./ramdisk.img4" ]]; then
+  irecovery -f ./ramdisk.img4
+  irecovery -c ramdisk
+fi
 irecovery -f ./devicetree.img4
 irecovery -c devicetree
 irecovery -f ./trustcache.img4

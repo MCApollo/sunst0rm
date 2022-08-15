@@ -2,7 +2,7 @@
 # Sunstorm.py
 
 """
-TOOD:
+TODO:
   - `from pyimg4 import IM4P`, use pyimg4 lib instead of calling the bin version
   - Use RemoteZip to speed up having to download the full IPSW
 """
@@ -112,6 +112,9 @@ def linux_hfsplus_sync(work) -> None:
         symlinks, files, and then finally chmod to same/correct permissions
     """
 
+    # XXX: There is a `hfsplus addall` command, but we want to ensure correct permissions and symlinks:
+    # hfsplus might error out with addall before it finishes
+    # execute(['hfsplus', f'{work}/ramdisk.dmg', 'addall', f'{work}/ramdisk'], ignore_errors=True)
     if not (os.path.exists(f'{work}/ramdisk') and os.path.exists(f'{work}/ramdisk.dmg')):
       print_error(f'Missing {work}/ramdisk or {work}/ramdisk.dmg (this is a bug)')
       sys.exit(1)
@@ -201,7 +204,7 @@ def prep_restore(ipsw, blob, boardconfig, kpp, legacy, skip_baseband, extra_ramd
       if LINUX:
         execute(['hfsplus', f'{work}/ramdisk.dmg', 'grow', str(round(5e+8))])
       else:
-        execute(['hdiutil', 'resize', '-size', '5024MB', f'{work}/ramdisk.dmg'])
+        execute(['hdiutil', 'resize', '-size', '5120MB', f'{work}/ramdisk.dmg'])
 
     # patch asr into the ramdisk
     print_info('Patching ASR in the RamDisk')
@@ -246,9 +249,6 @@ def prep_restore(ipsw, blob, boardconfig, kpp, legacy, skip_baseband, extra_ramd
     # detach the ramdisk
     print_info('Detaching RamDisk')
     if LINUX:
-      # XXX: There is a `hfsplus addall` command, but we want to ensure correct permissions and symlinks:
-      # hfsplus might error out with addall before it finishes
-      # execute(['hfsplus', f'{work}/ramdisk.dmg', 'addall', f'{work}/ramdisk'], ignore_errors=True)
       if extra_ramdisk:
         linux_hfsplus_sync(work)
 
@@ -435,7 +435,7 @@ def prep_boot(ipsw, blob, boardconfig, kpp, identifier, legacy, extra_ramdisk, b
       if LINUX:
         execute(['hfsplus', f'{work}/ramdisk.dmg', 'grow', str(round(5e+8))])
       else:
-        execute(['hdiutil', 'resize', '-size', '5024MB', f'{work}/ramdisk.dmg'])
+        execute(['hdiutil', 'resize', '-size', '5120MB', f'{work}/ramdisk.dmg'])
 
       # detach the ramdisk
       print_info('Detaching RamDisk')
