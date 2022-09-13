@@ -403,7 +403,8 @@ def prep_boot(ipsw, blob, boardconfig, kpp, identifier, legacy, extra_ramdisk, b
 
     # patch it like this:   Kernel64Patcher kcache.raw krnlboot.patched -f
     print_info('Patching Kernel')
-    execute(['Kernel64Patcher', f'{work}/kcache.raw', f'{work}/krnlboot.patched', '-f', '-a'])
+    execute(['Kernel64Patcher', f'{work}/kcache.raw', f'{work}/krnlboot.patched', '-f', '-a' if extra_ramdisk else ''])
+    # -> Taurine will refuse to jailbreak if `-a` is applied / AFMI is disabled
 
     # convert it like this:   pyimg4 im4p create -i krnlboot.patched -o krnlboot.im4p --extra kpp.bin -f rkrn --lzss
     print_info('Converting Kernel')
